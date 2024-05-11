@@ -17,6 +17,13 @@ func main() {
 	log.SetFlags(0)
 
 	flags := flag.NewFlagSet(fmt.Sprintf("%s @ %s", filepath.Base(os.Args[0]), Version), flag.ExitOnError)
+	flags.Usage = func() {
+		_, _ = fmt.Fprintf(flags.Output(), "Usage of %s:\n", flags.Name())
+		_, _ = fmt.Fprintln(flags.Output(), "ccwc [file ...]")
+		_, _ = fmt.Fprintln(flags.Output(), "A tool similar to the built-in `wc` program, but without all the flags because the output is JSON objects.")
+		_, _ = fmt.Fprintln(flags.Output(), "If no files are supplied, read from stdin.")
+		flags.PrintDefaults()
+	}
 	_ = flags.Parse(os.Args[1:])
 
 	paths := flags.Args()
