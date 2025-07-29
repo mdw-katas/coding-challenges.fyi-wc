@@ -21,72 +21,29 @@ func main() {
 		_, _ = fmt.Fprintf(flags.Output(), "Usage of %s:\n", flags.Name())
 		_, _ = fmt.Fprintln(flags.Output(), "ccwc [file ...]")
 		_, _ = fmt.Fprintln(flags.Output(), "A tool similar to the built-in `wc` program, but without all the flags because the output is JSON objects.")
-		_, _ = fmt.Fprintln(flags.Output(), "If no files are supplied, read from stdin.")
+		_, _ = fmt.Fprintln(flags.Output(), "If the only argument supplied is '-', read from stdin.")
+		_, _ = fmt.Fprintln(flags.Output(), "Note: this tool is quarantined to files rooted below the current working directory.")
 		flags.PrintDefaults()
 	}
 	_ = flags.Parse(os.Args[1:])
+	args := flags.Args()
+	encoder := json.NewEncoder(os.Stdout)
 
-	paths := flags.Args()
-	if len(paths) == 0 {
-		counts := wc.NewCounts("stdin")
-		_, err := counts.ReadFrom(os.Stdin)
-		if err != nil {
-			log.Fatal(err)
-		}
-		err = json.NewEncoder(os.Stdout).Encode(counts)
-		if err != nil {
-			log.Fatal(err)
-		}
-		return
-	}
-	failed := 0
-	aggregate := wc.NewCounts("")
-	for _, pattern := range paths {
-		matches, _ := filepath.Glob(pattern)
-		for _, path := range matches {
-			info, _ := os.Stat(path)
-			if info != nil && info.IsDir() {
-				continue
-			}
-			counts := wc.NewCounts(path)
-			ok := countFile(path, counts)
-			if !ok {
-				failed++
-			}
-			aggregate.Include(counts)
-		}
-	}
-	if aggregate.Files > 1 {
-		err := json.NewEncoder(os.Stdout).Encode(aggregate)
-		if err != nil {
-			log.Fatal(err)
-		}
-	}
-	if failed > 0 {
+	if len(args) == 0 {
+		log.Println("Error: At least one argument is required.")
+		flags.Usage()
 		os.Exit(1)
 	}
-}
-
-func countFile(path string, counts *wc.Counts) bool {
-	file, err := os.Open(path)
-	if err != nil {
-		log.Println(err)
-		return false
+	if len(args) == 1 && args[0] == "-" {
+		stats := wc.NewStats("stdin")
+		_, _ = stats.ReadFrom(os.Stdin)
+		_ = encoder.Encode(stats)
+		return
 	}
-	_, err = counts.ReadFrom(file)
-	if err != nil {
-		log.Println(err)
-		return false
-	}
-	err = file.Close()
-	if err != nil {
-		log.Println(err)
-		return false
-	}
-	err = json.NewEncoder(os.Stdout).Encode(counts)
-	if err != nil {
-		log.Println(err)
-		return false
-	}
-	return true
+	aggregator := wc.NewAggregator(
+		log.Default(),
+		encoder,
+		os.DirFS("."),
+	)
+	os.Exit(min(aggregator.Aggregate(args...), 1))
 }

@@ -7,7 +7,7 @@ import (
 	"unicode"
 )
 
-type Counts struct {
+type Stats struct {
 	Name  string `json:"name,omitempty"`
 	Files int64  `json:"files,omitempty"`
 	Lines int64  `json:"lines"`
@@ -15,33 +15,38 @@ type Counts struct {
 	Bytes int64  `json:"bytes"`
 }
 
-func NewCounts(name string) *Counts {
-	return &Counts{Name: name}
+func NewStats(name string) *Stats {
+	return &Stats{Name: name}
 }
 
-func (this *Counts) ReadFrom(r io.Reader) (n int64, err error) {
-	initial := this.Bytes
+func (this *Stats) ReadFrom(r io.Reader) (n int64, err error) {
 	reader := bufio.NewReader(r)
-	line := ""
-	for err != io.EOF {
+	var line string
+	for {
 		line, err = reader.ReadString('\n')
-		if err == nil || (err == io.EOF && len(line) > 0) {
-			this.CountLine(line)
+		if len(line) > 0 {
+			lines, words, bytes := this.processLine(line)
+			this.Lines += lines
+			this.Words += words
+			this.Bytes += bytes
+			n += bytes
+		}
+		if err == io.EOF {
+			return n, nil
+		}
+		if err != nil {
+			return n, err
 		}
 	}
-	if err == io.EOF {
-		err = nil
-	}
-	return this.Bytes - initial, err
 }
-func (this *Counts) CountLine(line string) {
+func (this *Stats) processLine(line string) (lines, words, bytes int64) {
 	if len(line) > 0 && line[len(line)-1] == '\n' {
-		this.Lines++
+		lines++
 	}
-	this.Bytes += int64(len(line))
+	bytes += int64(len(line))
 	line = strings.TrimSpace(line)
 	if len(line) == 0 {
-		return
+		return lines, words, bytes
 	}
 	inSpace := unicode.IsSpace(rune(line[0]))
 	for x := 1; x < len(line); x++ {
@@ -54,16 +59,17 @@ func (this *Counts) CountLine(line string) {
 			continue
 		}
 		if isSpace {
-			this.Words++
+			words++
 			inSpace = true
 		}
 	}
 	if !inSpace {
-		this.Words++
+		words++
 	}
+	return lines, words, bytes
 }
 
-func (this *Counts) Include(that *Counts) {
+func (this *Stats) Include(that *Stats) {
 	this.Files++
 	this.Lines += that.Lines
 	this.Words += that.Words
