@@ -40,10 +40,18 @@ func main() {
 		_ = encoder.Encode(stats)
 		return
 	}
+	working, err := os.Getwd()
+	if err != nil {
+		log.Fatal(err)
+	}
 	aggregator := wc.NewAggregator(
 		log.Default(),
 		encoder,
-		os.DirFS("."),
+		os.DirFS(working),
 	)
-	os.Exit(min(aggregator.Aggregate(args...), 1))
+	failures := aggregator.Aggregate(args...)
+	if failures > 0 {
+		flags.Usage()
+	}
+	os.Exit(min(failures, 1))
 }
